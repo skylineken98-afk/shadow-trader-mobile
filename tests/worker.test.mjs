@@ -1,6 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker from '../worker.mjs';
+import realWorker from '../worker.mjs';
+// All legacy research tests use a member-authenticated fixture. The production
+// Worker still validates a real Supabase bearer session via Railway.
+const worker={async fetch(request,env){
+ const path=new URL(request.url).pathname;
+ if(!path.startsWith('/api/')||path.startsWith('/api/chat/')||path==='/api/other')return realWorker.fetch(request,env);
+ const headers=new Headers(request.headers);headers.set('Authorization','Bearer test-member');
+ const authorized=new Request(request,{headers});
+ const previous=globalThis.fetch;
+ globalThis.fetch=async(url,opts)=>{
+   const u=new URL(String(url));
+   if(u.hostname.endsWith('.up.railway.app')&&u.pathname==='/api/chat/account')
+      return Response.json({user_id:'00000000-0000-0000-0000-000000000001',pro:true,enforced:true});
+   return previous(url,opts);
+ };
+ try{return await realWorker.fetch(authorized,{...env,CHAT_BACKEND_URL:'https://fixture.up.railway.app',CHAT_PROXY_TOKEN:'test-proxy'});}
+ finally{globalThis.fetch=previous;}
+}};
+
 const env={PUBLIC_SIGNALS_ENABLED:'true',SUPABASE_URL:'https://example.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'sb_secret_test'};
 const request=()=>new Request('https://mobile.example/api/signals');
 test('disabled and missing credentials fail closed',async()=>{
@@ -144,5 +162,20 @@ test('chat proxy does not follow redirects with its secret',async()=>{
   globalThis.fetch=async(u,o)=>{calls++;if(o.redirect==='error')throw new TypeError('Unsupported redirect mode');assert.equal(o.redirect,'manual');return new Response(null,{status:302,headers:{Location:'https://untrusted.example'}})};
   const response=await worker.fetch(new Request('https://mobile.example/api/chat/config'),{CHAT_BACKEND_URL:'https://chat.up.railway.app',CHAT_PROXY_TOKEN:'private-test'});
   assert.equal(response.status,502);assert.equal((await response.json()).code,'CHAT_UPSTREAM_REDIRECT');assert.equal(calls,1);
+ }finally{globalThis.fetch=old;}
+});
+
+test('public research requires signed-in KST member',async()=>{
+ const r=await realWorker.fetch(new Request('https://mobile.example/api/signals'),
+  {...env,CHAT_BACKEND_URL:'https://fixture.up.railway.app',CHAT_PROXY_TOKEN:'test'});
+ assert.equal(r.status,401);
+});
+test('active login without paid entitlement is rejected by real Worker',async()=>{
+ const old=globalThis.fetch;
+ try{
+  globalThis.fetch=async u=>{const x=new URL(String(u));if(x.pathname==='/api/chat/account')return Response.json({user_id:'u-test',enforced:true,pro:false});throw Error('unexpected');};
+  const r=await realWorker.fetch(new Request('https://mobile.example/api/signals',
+   {headers:{Authorization:'Bearer member-unpaid'}}),{...env,CHAT_BACKEND_URL:'https://fixture.up.railway.app',CHAT_PROXY_TOKEN:'test'});
+  assert.equal(r.status,403);
  }finally{globalThis.fetch=old;}
 });
