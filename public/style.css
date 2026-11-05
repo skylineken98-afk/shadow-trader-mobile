@@ -6,3 +6,19 @@ nav{overflow-x:auto;justify-content:space-around}nav button{flex:0 0 auto;min-wi
 .chartPreview{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}.chartPreview img{max-width:min(100%,320px);max-height:240px;object-fit:contain;border:1px solid #39445c;border-radius:10px}.chartPrompts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.chartPrompts button{font-size:.85rem}
 nav{display:flex;justify-content:flex-start;gap:5px;overflow-x:auto;white-space:nowrap}nav button{flex:0 0 62px}input[type=checkbox]{width:auto;margin:0 6px 0 0}.chartPrompts button{background:#232a49;color:#e8e7ff;border:1px solid #4e527e;border-radius:9px;padding:8px 10px}
 button:not(.ghost):not(.primary){border:1px solid #4e527e;border-radius:9px;padding:9px 12px;background:#232a49;color:#e8e7ff}nav button:not(.ghost):not(.primary){background:none;border:0;border-radius:0;padding:3px 0;color:#8f9fbd}nav button.selected:not(.ghost):not(.primary){color:#c0b3ff}button:disabled{opacity:.55;cursor:not-allowed}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font-size:11px}#chatSearchResults button{display:block;max-width:100%;white-space:normal;text-align:left;margin-bottom:8px}.panel>small{display:block;color:#9baac8;margin:5px 0}
+
+
+/* App-style authenticated entry. This overlay is UX only: the Worker enforces API authorization. */
+body.kst-locked header,body.kst-locked main,body.kst-locked nav{display:none!important}
+body:not(.kst-locked) #kstEntry{display:none!important}
+.entryGate{position:fixed;inset:0;z-index:1000;background:radial-gradient(circle at 75% 0,#25316a,#090f1e 65%);overflow-y:auto;display:flex;justify-content:center;align-items:flex-start;padding:clamp(22px,5vw,56px) 15px}
+.entryCard{width:100%;max-width:430px;background:#121d35;border:1px solid #36466f;box-shadow:0 28px 100px #050912aa;border-radius:24px;padding:clamp(22px,5vw,36px)}
+.entryMark{display:grid;place-items:center;width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,#686cf3,#27b6d5);font-size:29px;font-weight:800;margin-bottom:24px}
+.entryCard h1{font-size:clamp(31px,7vw,42px)}
+.entryCard .panel{border:0;background:transparent;padding:0;margin:0;box-shadow:none}
+.entryCard button{margin:5px 0 7px}
+.entryCard .ghost{width:100%;background:#192947;color:#e9efff;border:1px solid #465478;border-radius:12px;padding:12px}
+.entryCard .rememberChoice{display:flex;gap:10px;align-items:center;padding:8px 0;font-size:13px}
+.entryCard .rememberChoice input{width:18px;height:18px;margin:0}
+.entryCard #entryStatus{min-height:20px;color:#adbde0}
+.entryCard #chatStatus{margin:8px 0}
