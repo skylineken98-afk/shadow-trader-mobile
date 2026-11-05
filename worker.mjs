@@ -38,7 +38,8 @@ export default {
    }
    if(path!=='/api/chat/config'&&!request.headers.get('Authorization')?.startsWith('Bearer '))return json({error:'Sign in to KST Chat'},401);
    let body;try{body=['POST','DELETE'].includes(request.method)?await boundedChatBody(request,['/api/chat/message','/api/chat/stream'].includes(path)?3*1024*1024:32768):undefined;}catch{return json({error:'Chat payload too large or unreadable'},413);}
-   try{const response=await fetch(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','Authorization':request.headers.get('Authorization')||'','X-KST-Proxy':proxyToken},body:body||undefined,redirect:'error',signal:AbortSignal.timeout(70000)});
+   try{const response=await fetch(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','Authorization':request.headers.get('Authorization')||'','X-KST-Proxy':proxyToken},body:body||undefined,redirect:'manual',signal:AbortSignal.timeout(70000)});
+    if(response.status>=300&&response.status<400)return json({error:'Chat backend redirected; configure its direct HTTPS service URL.',code:'CHAT_UPSTREAM_REDIRECT'},502);
     if(path==='/api/chat/stream'&&response.ok&&(response.headers.get('content-type')||'').includes('text/event-stream'))return new Response(response.body,{status:200,headers:{'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
     if(!(response.headers.get('content-type')||'').includes('application/json'))return json({error:'Chat backend returned an unexpected response'},502);
     return new Response(await response.text(),{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});

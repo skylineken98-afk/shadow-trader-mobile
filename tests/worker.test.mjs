@@ -90,7 +90,7 @@ test('chat proxy requires deployment, authentication and a pinned Railway backen
 });
 test('chat proxy keeps API key on Railway and does not require public research mode',async()=>{
  const old=globalThis.fetch;
- try{globalThis.fetch=async(u,o)=>{assert.equal(u.hostname,'chat.up.railway.app');assert.equal(o.headers['X-KST-Proxy'],'private-test');assert.equal('OPENAI_API_KEY' in o.headers,false);assert.equal(o.redirect,'error');return Response.json({publishable_key:'sb_publishable_test',supabase_url:'https://example.supabase.co'})};const r=await worker.fetch(new Request('https://mobile.example/api/chat/config'),{CHAT_BACKEND_URL:'https://chat.up.railway.app',CHAT_PROXY_TOKEN:'private-test'});assert.equal(r.status,200);assert.equal((await r.json()).publishable_key,'sb_publishable_test');}finally{globalThis.fetch=old;}
+ try{globalThis.fetch=async(u,o)=>{assert.equal(u.hostname,'chat.up.railway.app');assert.equal(o.headers['X-KST-Proxy'],'private-test');assert.equal('OPENAI_API_KEY' in o.headers,false);assert.equal(o.redirect,'manual');return Response.json({publishable_key:'sb_publishable_test',supabase_url:'https://example.supabase.co'})};const r=await worker.fetch(new Request('https://mobile.example/api/chat/config'),{CHAT_BACKEND_URL:'https://chat.up.railway.app',CHAT_PROXY_TOKEN:'private-test'});assert.equal(r.status,200);assert.equal((await r.json()).publishable_key,'sb_publishable_test');}finally{globalThis.fetch=old;}
 });
 test('chart proxy supports bounded image messages but rejects oversized streams',async()=>{
  const old=globalThis.fetch;
@@ -136,4 +136,13 @@ test('private/admin/billing routes require verified sessions at the proxy',async
  const e={CHAT_BACKEND_URL:'https://chat.up.railway.app',CHAT_PROXY_TOKEN:'test'};
  for(const route of ['account','positions','private-alerts','admin/system'])assert.equal((await worker.fetch(new Request('https://mobile.example/api/chat/'+route),e)).status,401);
  assert.equal((await worker.fetch(new Request('https://mobile.example/api/chat/admin/arbitrary'),e)).status,404);
+});
+
+test('chat proxy does not follow redirects with its secret',async()=>{
+ const old=globalThis.fetch;let calls=0;
+ try{
+  globalThis.fetch=async(u,o)=>{calls++;if(o.redirect==='error')throw new TypeError('Unsupported redirect mode');assert.equal(o.redirect,'manual');return new Response(null,{status:302,headers:{Location:'https://untrusted.example'}})};
+  const response=await worker.fetch(new Request('https://mobile.example/api/chat/config'),{CHAT_BACKEND_URL:'https://chat.up.railway.app',CHAT_PROXY_TOKEN:'private-test'});
+  assert.equal(response.status,502);assert.equal((await response.json()).code,'CHAT_UPSTREAM_REDIRECT');assert.equal(calls,1);
+ }finally{globalThis.fetch=old;}
 });
