@@ -3,8 +3,13 @@ const k={watch:"st_watch_v1",paper:"st_paper_v1",notes:"st_notes_v1"};
 function load(type){try{const x=JSON.parse(localStorage.getItem(k[type])||"[]");return Array.isArray(x)?x:[]}catch{return []}}
 function save(type,x){localStorage.setItem(k[type],JSON.stringify(x))}
 function el(tag,content,klass){let n=document.createElement(tag);if(content!==undefined)n.textContent=String(content);if(klass)n.className=klass;return n}
+async function kstFetch(url,options={}){
+ if(!window.kstAuthorized)throw Error('Sign in and activate your KST membership to access research');
+ const token=await freshChatToken();
+ return fetch(url,{...options,headers:{...(options.headers||{}),Authorization:'Bearer '+token}});
+}
 function money(x){return (Number(x)||0).toLocaleString("en-US",{style:"currency",currency:"USD"})}
-function show(name){document.querySelectorAll('.page').forEach(e=>e.classList.toggle('active',e.id===name));document.querySelectorAll('nav button').forEach(e=>e.classList.toggle('selected',e.dataset.go===name));window.scrollTo({top:0,behavior:'instant'})}
+function show(name){if(document.body.classList.contains('kst-locked'))return;document.querySelectorAll('.page').forEach(e=>e.classList.toggle('active',e.id===name));document.querySelectorAll('nav button').forEach(e=>e.classList.toggle('selected',e.dataset.go===name));window.scrollTo({top:0,behavior:'instant'})}
 window.show=show;document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
 function renderWatch(){let root=document.querySelector('#watchItems');root.replaceChildren();let a=load('watch');if(!a.length){root.append(el('div','No symbols saved. Add one above.','empty'));return}a.forEach((v,i)=>{let d=el('div',undefined,'row');d.append(el('b',v));let b=el('button','Remove');b.addEventListener('click',()=>{a.splice(i,1);save('watch',a);renderWatch()});d.append(b);root.append(d)})}
 document.querySelector('#watchForm').addEventListener('submit',e=>{e.preventDefault();let n=document.querySelector('#watchInput');let v=n.value.toUpperCase().trim().replace(/[^A-Z0-9.\-]/g,'').slice(0,20);if(v){let a=load('watch');if(!a.includes(v))a.push(v);save('watch',a);renderWatch()}n.value='' });
@@ -31,8 +36,8 @@ function renderSignals(rows,mode){
  });
 }
 async function refreshSignals(){
- if(busy||document.hidden)return;busy=true;const button=document.querySelector('#refreshSignals');button.disabled=true;
- try{const r=await fetch('/api/signals',{cache:'no-store',signal:AbortSignal.timeout(15000)});const type=r.headers.get('content-type')||'';
+ if(!window.kstAuthorized||busy||document.hidden)return;busy=true;const button=document.querySelector('#refreshSignals');button.disabled=true;
+ try{const r=await kstFetch('/api/signals',{cache:'no-store',signal:AbortSignal.timeout(15000)});const type=r.headers.get('content-type')||'';
  if(!type.includes('application/json'))throw Error('Signal API is missing. Deploy the included Worker, not just the public folder.');
  const data=await r.json();if(!r.ok)throw Error(data.error||'Signal service unavailable');if(!Array.isArray(data.signals))throw Error('Unexpected response from signal service');
  imported=false;renderSignals(data.signals,'Railway scanner');
@@ -47,7 +52,7 @@ document.querySelector('#signalFile').addEventListener('change',async e=>{if(!e.
 renderWatch();renderPaper();renderNotes();refreshSignals();setInterval(refreshSignals,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshSignals()});
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 let optionBusy=false,brainBusy=false;
-async function api(path){const r=await fetch(path,{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!(r.headers.get('content-type')||'').includes('application/json'))throw Error('Deploy the included Cloudflare Worker to enable the API.');const d=await r.json();if(!r.ok)throw Error(d.error||'Service unavailable');return d;}
+async function api(path){const r=await kstFetch(path,{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!(r.headers.get('content-type')||'').includes('application/json'))throw Error('Deploy the included Cloudflare Worker to enable the API.');const d=await r.json();if(!r.ok)throw Error(d.error||'Service unavailable');return d;}
 async function refreshOptions(){
  if(optionBusy||document.hidden)return;optionBusy=true;
  const category=document.querySelector('#optionCategory').value,budget=document.querySelector('#optionBudget').value;
@@ -105,7 +110,7 @@ document.querySelector('#refreshProgress').addEventListener('click',refreshProgr
 let activityBusy=false;
 async function refreshActivity(){if(activityBusy||document.hidden)return;activityBusy=true;try{const d=await api('/api/activity'),root=document.querySelector('#tradeActivity');root.replaceChildren();if(!d.events.length)root.append(el('p','No paper entries or exits recorded yet.'));for(const e of d.events){const row=el('article',undefined,'entry');row.append(el('b','PAPER '+e.action+' · '+(agentNames[e.agent]??e.agent)),el('strong',e.contract+' · '+e.quantity+' contract'),el('small','Premium '+money(e.price)+' · Posted '+formatTime(e.created_at)+' · Quote '+formatTime(e.quote_at)),el('small',e.reason));if(e.realized_pl!==null)row.append(el('strong','Realized paper P/L '+money(e.realized_pl),e.realized_pl>=0?'good':'bad'));root.append(row);}document.querySelector('#activityStatus').textContent='Latest 100 paper events · checked '+new Date().toLocaleTimeString();}catch(e){document.querySelector('#activityStatus').textContent=e.message+' Previous events may be outdated.';}finally{activityBusy=false;}}
 function pushBytes(s){const data=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));return Uint8Array.from(data,c=>c.charCodeAt(0));}
-async function savePush(body){const r=await fetch('/api/notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const d=await r.json();if(!r.ok)throw Error(d.error||'Notification preference failed');return d;}
+async function savePush(body){const r=await kstFetch('/api/notifications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const d=await r.json();if(!r.ok)throw Error(d.error||'Notification preference failed');return d;}
 document.querySelector('#enableTradeAlerts').addEventListener('click',async()=>{
  const status=document.querySelector('#notificationStatus');
  // Call permission directly from the visitor's tap; do not request on page load.
