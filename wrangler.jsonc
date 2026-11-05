@@ -34,5 +34,8 @@
         "period": 60
       }
     }
-  ]
+  ],
+  "vars": {
+    "CHAT_BACKEND_URL": "https://kst-chat-production.up.railway.app"
+  }
 }
