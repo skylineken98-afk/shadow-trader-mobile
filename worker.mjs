@@ -27,7 +27,9 @@ export default {
     (/^\/api\/chat\/positions\/[a-f0-9-]{36}$/.test(path)&&request.method==='DELETE');
    if(!allowed)return json({error:'Chat route not found'},404);
    if(!env.CHAT_BACKEND_URL||!env.CHAT_PROXY_TOKEN)return json({error:'KST Chat is not deployed yet. Configure its Railway service and Cloudflare proxy settings.'},503);
-   let base;try{base=new URL(env.CHAT_BACKEND_URL)}catch{return json({error:'Invalid chat backend URL'},503)}
+   const proxyToken=String(env.CHAT_PROXY_TOKEN).trim();
+   if(!proxyToken||/[^\x21-\x7e]/.test(proxyToken))return json({error:'CHAT_PROXY_TOKEN contains invalid characters. Copy only the one-line value from Railway.',code:'PROXY_TOKEN_FORMAT'},503);
+   let base;try{base=new URL(String(env.CHAT_BACKEND_URL).trim())}catch{return json({error:'Invalid chat backend URL'},503)}
    if(base.protocol!=='https:'||!base.hostname.endsWith('.up.railway.app')||base.username||base.password)return json({error:'Use the Railway chat service HTTPS public domain'},503);
    if(request.method!=='GET'){
     if(request.headers.get('Origin')!==new URL(request.url).origin)return json({error:'Same-origin request required'},403);
@@ -36,11 +38,11 @@ export default {
    }
    if(path!=='/api/chat/config'&&!request.headers.get('Authorization')?.startsWith('Bearer '))return json({error:'Sign in to KST Chat'},401);
    let body;try{body=['POST','DELETE'].includes(request.method)?await boundedChatBody(request,['/api/chat/message','/api/chat/stream'].includes(path)?3*1024*1024:32768):undefined;}catch{return json({error:'Chat payload too large or unreadable'},413);}
-   try{const response=await fetch(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','Authorization':request.headers.get('Authorization')||'','X-KST-Proxy':env.CHAT_PROXY_TOKEN},body:body||undefined,redirect:'error',signal:AbortSignal.timeout(70000)});
+   try{const response=await fetch(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','Authorization':request.headers.get('Authorization')||'','X-KST-Proxy':proxyToken},body:body||undefined,redirect:'error',signal:AbortSignal.timeout(70000)});
     if(path==='/api/chat/stream'&&response.ok&&(response.headers.get('content-type')||'').includes('text/event-stream'))return new Response(response.body,{status:200,headers:{'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
     if(!(response.headers.get('content-type')||'').includes('application/json'))return json({error:'Chat backend returned an unexpected response'},502);
     return new Response(await response.text(),{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
-   }catch{return json({error:'Chat service unavailable or timed out. Check history before retrying.'},502);}
+   }catch(error){const timedOut=['TimeoutError','AbortError'].includes(error?.name);return json({error:timedOut?'Railway chat request timed out. Check history before retrying.':'Cloudflare could not send the chat request. Check the proxy token format and backend connection.',code:timedOut?'CHAT_UPSTREAM_TIMEOUT':'CHAT_UPSTREAM_FETCH_FAILED'},502);}
   }
   if(!['/api/earnings','/api/company-news','/api/stocks','/api/signals','/api/options','/api/brain','/api/news','/api/request','/api/proxy','/api/progress','/api/activity','/api/notifications'].includes(path))return json({error:'Not found'},404);
   if(request.method!=='GET'&&!(['/api/request','/api/notifications'].includes(path)&&request.method==='POST'))return json({error:'Method not allowed'},405);
