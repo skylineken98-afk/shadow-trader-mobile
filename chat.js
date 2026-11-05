@@ -36,7 +36,8 @@ document.querySelector('#entryContinue').addEventListener('click',()=>{if(window
 document.querySelector('#entryLogout').addEventListener('click',()=>document.querySelector('#chatLogout').click());
 async function checkKSTEntry(){
  if(!chatSession){window.kstAuthorized=false;document.body.classList.add('kst-locked');return;}
- document.body.classList.add('kst-locked');
+ const alreadyAuthorized=Boolean(window.kstAuthorized);
+ if(!alreadyAuthorized)document.body.classList.add('kst-locked');
  const info=await chatAPI('account');
  const allowed=Boolean(info.admin||info.pro||!info.enforced);
  window.kstEntryCanContinue=allowed;
@@ -49,8 +50,10 @@ async function checkKSTEntry(){
  'KST beta access is available. You can choose a membership when checkout opens, or continue the current free beta.';
  document.querySelector('#entryMember').hidden=false;
  document.querySelector('#entryContinue').hidden=!allowed;
- if(info.admin||info.pro){document.body.classList.remove('kst-locked');window.kstAuthorized=true;show('home');refreshSignals();}
- else{window.kstAuthorized=false;document.body.classList.add('kst-locked');}
+ if(info.admin||info.pro||(!info.enforced&&alreadyAuthorized)){
+  document.body.classList.remove('kst-locked');window.kstAuthorized=true;
+  if(!alreadyAuthorized){show('home');refreshSignals();}
+ }else{window.kstAuthorized=false;document.body.classList.add('kst-locked');}
 }
 chatView();
 initChat();
