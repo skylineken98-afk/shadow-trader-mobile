@@ -22,3 +22,10 @@ body:not(.kst-locked) #kstEntry{display:none!important}
 .entryCard .rememberChoice input{width:18px;height:18px;margin:0}
 .entryCard #entryStatus{min-height:20px;color:#adbde0}
 .entryCard #chatStatus{margin:8px 0}
+
+/* Always-visible sign-in risk notice; readable on small screens. */
+.entryRiskDisclosure{margin:17px 0 22px;padding:14px 15px;border:1px solid #8d6946;background:#34261e;color:#f5ebdd;border-radius:12px;font-size:12.5px;line-height:1.52}
+.entryRiskDisclosure>strong{display:block;margin-bottom:8px;font-size:14px;color:#ffda9c;letter-spacing:.01em}
+.entryRiskDisclosure p{margin:7px 0}
+.entryRiskDisclosure p:last-child{margin-bottom:0}
+.entryRiskDisclosure p strong{color:#fff0ca}
