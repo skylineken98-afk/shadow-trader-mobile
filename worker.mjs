@@ -38,7 +38,7 @@ export default {
    }
    if(path!=='/api/chat/config'&&!request.headers.get('Authorization')?.startsWith('Bearer '))return json({error:'Sign in to KST Chat'},401);
    let body;try{body=['POST','DELETE'].includes(request.method)?await boundedChatBody(request,['/api/chat/message','/api/chat/stream'].includes(path)?3*1024*1024:32768):undefined;}catch{return json({error:'Chat payload too large or unreadable'},413);}
-   try{const response=await fetch(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','Authorization':request.headers.get('Authorization')||'','X-KST-Proxy':proxyToken},body:body||undefined,redirect:'manual',signal:AbortSignal.timeout(70000)});
+   try{const response=await fetch(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','Authorization':request.headers.get('Authorization')||'','X-KST-Proxy':proxyToken,...((path==='/api/chat/message'||path==='/api/chat/stream')?{'X-KST-User-AI-Key':request.headers.get('X-KST-User-AI-Key')||''}:{})},body:body||undefined,redirect:'manual',signal:AbortSignal.timeout(70000)});
     if(response.status>=300&&response.status<400)return json({error:'Chat backend redirected; configure its direct HTTPS service URL.',code:'CHAT_UPSTREAM_REDIRECT'},502);
     if(path==='/api/chat/stream'&&response.ok&&(response.headers.get('content-type')||'').includes('text/event-stream'))return new Response(response.body,{status:200,headers:{'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
     if(!(response.headers.get('content-type')||'').includes('application/json'))return json({error:'Chat backend returned an unexpected response'},502);
@@ -47,6 +47,20 @@ export default {
   }
   if(!['/api/earnings','/api/company-news','/api/stocks','/api/signals','/api/options','/api/brain','/api/news','/api/request','/api/proxy','/api/progress','/api/activity','/api/notifications'].includes(path))return json({error:'Not found'},404);
   if(request.method!=='GET'&&!(['/api/request','/api/notifications'].includes(path)&&request.method==='POST'))return json({error:'Method not allowed'},405);
+  // API research access is enforced by the server, not merely hidden in UI.
+  // Validate signed-in user and KST membership against Railway on every
+  // request; an AI provider key never grants a KST research entitlement.
+  const auth=request.headers.get('Authorization')||'';
+  if(!auth.startsWith('Bearer '))return json({error:'Sign in to KST to access research'},401);
+  let memberOrigin;try{memberOrigin=new URL(String(env.CHAT_BACKEND_URL||''))}catch{return json({error:'KST authentication service unavailable'},503)}
+  if(memberOrigin.protocol!=='https:'||!memberOrigin.hostname.endsWith('.up.railway.app')||memberOrigin.username||memberOrigin.password||!env.CHAT_PROXY_TOKEN)return json({error:'KST membership verification unavailable'},503);
+  try{
+   const verified=await fetch(new URL('/api/chat/account',memberOrigin),{method:'GET',headers:{Authorization:auth,'X-KST-Proxy':String(env.CHAT_PROXY_TOKEN).trim()},redirect:'manual',signal:AbortSignal.timeout(12000)});
+   if(!verified.ok)return json({error:verified.status===401?'Sign in to KST':'Membership access unavailable'},verified.status===401?401:503);
+   const account=await verified.json();
+   if(!account?.user_id)return json({error:'KST authentication failed'},401);
+   if(account.enforced&&!account.pro)return json({error:'Activate your KST membership to access research'},403);
+  }catch{return json({error:'KST membership verification unavailable'},503);}
   if(request.method==='GET'&&env.PUBLIC_LIMITER&&!(await env.PUBLIC_LIMITER.limit({key:request.headers.get('CF-Connecting-IP')||'unknown'})).success)return json({error:'Please wait before refreshing the public feed'},429);
   // Explicit opt-in: endpoint exposes only the research fields listed above publicly.
   if(env.PUBLIC_SIGNALS_ENABLED!=='true')return json({error:'Signal endpoint not enabled. Set PUBLIC_SIGNALS_ENABLED=true in Cloudflare to publish the research feed.'},503);
