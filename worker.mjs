@@ -45,6 +45,8 @@ export default {
     return new Response(await response.text(),{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
    }catch(error){const timedOut=['TimeoutError','AbortError'].includes(error?.name);return json({error:timedOut?'Railway chat request timed out. Check history before retrying.':'Cloudflare could not send the chat request. Check the proxy token format and backend connection.',code:timedOut?'CHAT_UPSTREAM_TIMEOUT':'CHAT_UPSTREAM_FETCH_FAILED'},502);}
   }
+  if(!['/api/earnings','/api/company-news','/api/stocks','/api/signals','/api/options','/api/brain','/api/news','/api/request','/api/proxy','/api/progress','/api/activity','/api/notifications'].includes(path))return json({error:'Not found'},404);
+  if(request.method!=='GET'&&!(['/api/request','/api/notifications'].includes(path)&&request.method==='POST'))return json({error:'Method not allowed'},405);
   // API research access is enforced by the server, not merely hidden in UI.
   // Validate signed-in user and KST membership against Railway on every
   // request; an AI provider key never grants a KST research entitlement.
@@ -59,8 +61,6 @@ export default {
    if(!account?.user_id)return json({error:'KST authentication failed'},401);
    if(account.enforced&&!account.pro)return json({error:'Activate your KST membership to access research'},403);
   }catch{return json({error:'KST membership verification unavailable'},503);}
-  if(!['/api/earnings','/api/company-news','/api/stocks','/api/signals','/api/options','/api/brain','/api/news','/api/request','/api/proxy','/api/progress','/api/activity','/api/notifications'].includes(path))return json({error:'Not found'},404);
-  if(request.method!=='GET'&&!(['/api/request','/api/notifications'].includes(path)&&request.method==='POST'))return json({error:'Method not allowed'},405);
   if(request.method==='GET'&&env.PUBLIC_LIMITER&&!(await env.PUBLIC_LIMITER.limit({key:request.headers.get('CF-Connecting-IP')||'unknown'})).success)return json({error:'Please wait before refreshing the public feed'},429);
   // Explicit opt-in: endpoint exposes only the research fields listed above publicly.
   if(env.PUBLIC_SIGNALS_ENABLED!=='true')return json({error:'Signal endpoint not enabled. Set PUBLIC_SIGNALS_ENABLED=true in Cloudflare to publish the research feed.'},503);
