@@ -1,0 +1,18 @@
+{
+  "name": "Shadow Trader Mobile",
+  "short_name": "Shadow Trader",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080e1b",
+  "theme_color": "#080e1b",
+  "description": "Mobile-first options, stock and crypto research and local simulated trading",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

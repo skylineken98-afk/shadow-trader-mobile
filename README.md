@@ -1,19 +1,13 @@
-# Shadow Trader Mobile — public beta frontend
+# KST mobile r5
 
-Installable phone-first PWA for **options, stocks and crypto**. This is a complete **static frontend** that deploys without a build command and has local-only watchlist, simulated trading journal and research notes, plus JSON research-signal import. All quotes and broker trading are deliberately **not connected**.
+The mobile app now includes chart chat, earnings, ticker news, public stock setups, private contract ideas and positions, and account/membership controls.
 
-## Cloudflare Pages (free tier)
+This upgrades the old static-only Pages preview to a Cloudflare Worker with server-only API access. The Worker uses wrangler.jsonc and serves public/. Root HTML/JS/CSS copies are kept in sync for the existing static preview, but static hosting alone does not provide the API.
 
-Upload the **contents of this folder** into `skylineken98-afk/shadow-trader-mobile` on GitHub (not a ZIP; not an extra nested directory). In Cloudflare use **Pages**, connect that GitHub repo, choose **no framework**, set **build command empty** and **output directory `.`**. Do not use the existing Python repository as a Cloudflare Workers app or run `npx wrangler deploy` on it. A plain static Pages project suffices here.
+Do not deploy before the backend schema and services are configured and verified. Add SUPABASE_URL and server-only SUPABASE_SERVICE_ROLE_KEY, PUBLIC_SIGNALS_ENABLED=true when intentionally publishing research, and the chat proxy URL/secret and optional push key. Never put secrets in public/ or root browser files.
 
-Alternatively deploy **this folder** directly to Cloudflare Pages using Direct Upload for an initial beta preview.
+Use the existing Cloudflare project settings to determine whether to migrate from Pages to Workers. This repository update alone does not change that hosting configuration.
 
-## Backend reality
+Development checks: npm ci && npm test. Optional real browser smoke: npx playwright install chromium && npm run test:browser. All API data in interaction tests is synthetic.
 
-- Original V1 ranking formula: preserved in the separate backend archive included in the outer bundle. This frontend does not independently calculate option chains.
-- AI Brain/continuous learning, remote scheduled paper agents, Robinhood, Crypto.com, Alpaca live data: **not operational through this static frontend**. They need deployed authenticated backend services, secure API keys, permissions, endpoint configuration, data retention and appropriate testing.
-- No secrets belong in the public repo. No live order capabilities exist in this release.
-- Local paper records live in browser localStorage: clearing site data removes them. Export your simulated trades using the button.
-- The V1 ranking is quality, not win probability. No current prices are shown.
-
-Keep the existing Python V3 repository independently deployed; **do not upload the Python backend archive to your public mobile GitHub repo**. It may contain deployment configuration that must be reviewed for secrets, even though none are intentionally included here.
+Read RELEASE_R5.md for the full activation steps and verification limits. Billing enforcement and live execution remain disabled.

@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/worker.test.mjs && node tests/ui-smoke.mjs",
+    "test:browser": "node tests/browser-smoke.mjs"
+  },
+  "devDependencies": {
+    "happy-dom": "21.0.4",
+    "playwright": "1.62.1"
+  }
+}
