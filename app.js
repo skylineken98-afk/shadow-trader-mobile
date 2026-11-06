@@ -73,10 +73,14 @@ function signalCard(s,rank){
  metric('Contract volume',valid(activity?.contract_volume)?Number(activity.contract_volume).toLocaleString():'Unavailable');metric('Open interest',valid(activity?.open_interest)?Number(activity.open_interest).toLocaleString():'Unavailable');card.append(grid);
  const probability=el('div',undefined,'signalProbability');probability.append(el('small','Win probability'),el('b','Not calibrated'));card.append(probability);
  const levels=el('div',undefined,'signalLevels');
- for(const [label,multiple,cls] of [['T1 +30%',1.3,'good'],['T2 +50%',1.5,'good'],['T3 +100%',2,'good'],['Stop −30%',.7,'bad']]){const box=el('div');box.append(el('small',label),el('b',entry===null?'—':money(entry*multiple),cls));levels.append(box);}card.append(levels);
- card.append(el('small','Premium review levels from recorded ask; not forecasts or automatic orders. Stop fills can differ.','signalFootnote'));
+ for(const [label,multiple,cls] of [['T1 +30%',1.3,'good'],['T2 +40%',1.4,'good'],['T3 +50%',1.5,'good'],['T4 +75%',1.75,'good'],['T5 +100%',2,'good']]){const box=el('div');box.append(el('small',label),el('b',entry===null?'—':money(entry*multiple),cls));levels.append(box);}card.append(levels);
+ const lock=s.risk_snapshot?.profit_lock;
+ const stop=el('div',undefined,'signalProbability');
+ stop.append(el('small',lock?.stop_hit_at?'Stop observed · monitoring exit':'Rising stop reference'),el('b',entry===null?'Unavailable':money(valid(lock?.stop_premium)?lock.stop_premium:entry*.7)+(lock?' · '+(lock.stop_return>=0?'+':'')+(lock.stop_return*100).toFixed(0)+'%':' · initial −30%')));card.append(stop);
+ if(lock)card.append(el('small','Next target '+money(lock.next_target_premium)+' (+'+(lock.next_target_return*100).toFixed(0)+'%) · '+formatTime(lock.quote_at),'signalQuote'));
+ card.append(el('small','Stop rises to each reached level: +30%, +40%, +50%, +75%, +100%, then +25-point steps. Monitoring only; no broker orders or guaranteed fills.','signalFootnote'));
  const details=el('details',undefined,'signalDetails');details.append(el('summary','Research details & risk'));
- details.append(el('p','Score ranks research quality; it is not a win probability. No calibrated probability is available. Targets and stop refer to option premium per share, not the underlying price.'));
+ details.append(el('p','Score ranks research quality; it is not a win probability. No calibrated probability is available. Targets and stop refer to option premium per share, not the underlying price. The stop never moves down. A newly reached level arms the reference; a later observed bid at or below it records an exit. Fees are excluded from this gross premium ladder.'));
  if(s.feed==='indicative')details.append(el('p','Indicative quotes are modified and are not executable OPRA prices. Confirm current bid/ask with your broker.'));
  if(s.quality_label==='WATCHLIST')details.append(el('p','WATCHLIST: relaxed spread or delta quality; not a confirmed entry.'));
  if(valid(s.estimated_pl))details.append(el('p','Estimated P/L '+money(s.estimated_pl)+' including configured fees; no verified fill.'));
