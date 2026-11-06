@@ -146,3 +146,15 @@ test('chat proxy does not follow redirects with its secret',async()=>{
   assert.equal(response.status,502);assert.equal((await response.json()).code,'CHAT_UPSTREAM_REDIRECT');assert.equal(calls,1);
  }finally{globalThis.fetch=old;}
 });
+
+test('each accepted request gets a distinct queue row, including within one minute',async()=>{
+ const old=globalThis.fetch;const rows=[];
+ try{globalThis.fetch=async(u,o)=>{rows.push(JSON.parse(o.body));return new Response(null,{status:201})};
+ const e={...env,REQUEST_LIMITER:{limit:async()=>({success:true})}};
+ const req=()=>new Request('https://mobile.example/api/request',{method:'POST',headers:{Origin:'https://mobile.example'},body:JSON.stringify({category:'Swings',budget:100})});
+ const a=await (await worker.fetch(req(),e)).json();const b=await (await worker.fetch(req(),e)).json();
+ assert.notEqual(a.id,b.id);assert.equal(rows.length,2);
+ globalThis.fetch=async()=>Response.json([rows[0]]);
+ assert.equal((await worker.fetch(new Request('https://mobile.example/api/request?id='+a.id),e)).status,200);
+ }finally{globalThis.fetch=old;}
+});

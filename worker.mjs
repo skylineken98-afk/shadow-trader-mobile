@@ -131,7 +131,7 @@ export default {
    if(path==='/api/request'){
     if(request.method==='GET'){
      const id=new URL(request.url).searchParams.get('id')||'';
-     if(!/^(0DTE|Swings|LEAPS)-(30|50|100|200|500|1000|3000)-[0-9]{8,12}$/.test(id))return json({error:'Invalid request ID'},400);
+     if(!/^(0DTE|Swings|LEAPS)-(30|50|100|200|500|1000|3000)-(?:[0-9]{8,12}|[0-9a-f-]{36})$/.test(id))return json({error:'Invalid request ID'},400);
      const rows=await read('kst_signal_requests',{select:'id,created_at,category,budget,status,completed_at,results,message',id:'eq.'+id,limit:'1'});
      return rows[0]?json(rows[0]):json({error:'Request not found'},404);
     }
@@ -143,7 +143,7 @@ export default {
     const raw=await request.text();if(raw.length>256)return json({error:'Request too large'},413);
     let body;try{body=JSON.parse(raw)}catch{return json({error:'Invalid request'},400)}
     if(!['0DTE','Swings','LEAPS'].includes(body.category)||![30,50,100,200,500,1000,3000].includes(body.budget))return json({error:'Invalid category or budget'},400);
-    const id=body.category+'-'+body.budget+'-'+Math.floor(Date.now()/60000);
+    const id=body.category+'-'+body.budget+'-'+crypto.randomUUID();
     const row={id,category:body.category,budget:body.budget,created_at:new Date().toISOString(),status:'PENDING'};
     const u=new URL('/rest/v1/kst_signal_requests',base);
     const res=await fetch(u,{method:'POST',headers:{...headers,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(row),signal:AbortSignal.timeout(10000)});
