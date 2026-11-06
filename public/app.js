@@ -122,10 +122,10 @@ let progressBusy=false;
 const agentNames={conservative:'Conservative',balanced:'Balanced',aggressive:'Aggressive',challenge:'Challenge',daily_10pct_research:'Daily 10% Research'};
 async function refreshProgress(){if(progressBusy||document.hidden)return;progressBusy=true;try{
  const d=await api('/api/progress'),root=document.querySelector('#agentProgress');root.replaceChildren();
- for(const a of d.accounts){const card=el('article',undefined,'panel');const total=Number(a.equity)-Number(a.starting_balance);card.append(el('h2',agentNames[a.agent]??a.agent));const stats=el('div',undefined,'stats');for(const [label,value] of [['Starting balance',money(a.starting_balance)],['Paper account value',money(a.equity)],['Total P/L',money(total)],['Return',(total/Number(a.starting_balance)*100).toFixed(2)+'%'],['Cash',money(a.cash)],['Realized P/L',money(a.realized_pl)],['Open P/L',money(a.unrealized_pl)],['Closed trades',String(a.closed_trades)]]){const cell=el('div');cell.append(el('span',label),el('b',value));stats.append(cell);}card.append(stats);
+ for(const a of d.accounts){const card=el('article',undefined,'panel');const total=Number(a.equity)-Number(a.starting_balance);card.append(el('h2',agentNames[a.agent]??a.agent));if(a.agent==='aggressive')card.append(el('small','SCALPER · initial −25% · 30/40/50/75/100 then 50-point locks · 15% gain giveback after +30% · max 3 contracts · fresh-trend re-entry'));const stats=el('div',undefined,'stats');for(const [label,value] of [['Starting balance',money(a.starting_balance)],['Paper account value',money(a.equity)],['Total P/L',money(total)],['Return',(total/Number(a.starting_balance)*100).toFixed(2)+'%'],['Cash',money(a.cash)],['Realized P/L',money(a.realized_pl)],['Open P/L',money(a.unrealized_pl)],['Closed trades',String(a.closed_trades)]]){const cell=el('div');cell.append(el('span',label),el('b',value));stats.append(cell);}card.append(stats);
  if(Number(a.closed_trades)>0)card.append(el('p','Winning closed trades: '+a.wins+'/'+a.closed_trades+' · '+(Number(a.wins)/Number(a.closed_trades)*100).toFixed(1)+'%'));
  if(!a.open_positions.length)card.append(el('p','No open research position.'));
- for(const p of a.open_positions){const age=Date.now()-Date.parse(p.quote_at);const row=el('div',undefined,'entry');row.append(el('b',p.contract+' · 1 contract'),el('small','Ask entry '+money(p.entry_ask)+' · Last bid '+money(p.last_bid)+' · Open P/L '+money(p.unrealized_pl)),el('small',(age>300000||age<0||!Number.isFinite(age)?'STALE MARK · ':'')+formatTime(p.quote_at)),el('small',p.regime+' · '+p.model_version));card.append(row);}
+ for(const p of a.open_positions){const age=Date.now()-Date.parse(p.quote_at);const row=el('div',undefined,'entry');row.append(el('b',p.contract+' · '+(p.quantity||1)+' contract(s)'),el('small','Ask entry '+money(p.entry_ask)+' · Last bid '+money(p.last_bid)+' · Open P/L '+money(p.unrealized_pl)),el('small',(age>300000||age<0||!Number.isFinite(age)?'STALE MARK · ':'')+formatTime(p.quote_at)),el('small',p.regime+' · '+p.model_version+' · '+(p.feed||'Feed unknown')+' · Stop reference '+(Number(p.stop_return||0)*100).toFixed(1)+'%'));card.append(row);}
  const last=a.last_decision;card.append(el('p',last?last.action+': '+last.reason:'Waiting for the research worker to evaluate fresh quotes.'));if(last)card.append(el('small','Decision: '+formatTime(last.created_at)));root.append(card);
  }
  document.querySelector('#progressStatus').textContent='Paper accounts fetched '+new Date().toLocaleTimeString()+'. Backend ledger persists when the site is closed.';
@@ -148,3 +148,23 @@ try{const saved=JSON.parse(localStorage.getItem('kst_push_events')||'null');if(A
 if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(['progress','stocks','positions','account'].includes(e.data?.show))show(e.data.show)});
 if(['#progress','#stocks','#positions','#account','#earnings'].includes(location.hash))show(location.hash.slice(1));
 refreshActivity();setInterval(refreshActivity,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshActivity()});
+
+let performanceData=null,performanceBusy=false;
+function renderPerformance(){
+ const root=document.querySelector('#performanceList');root.replaceChildren();
+ const rows=performanceData?.[document.querySelector('#performanceFilter').value]||[];
+ if(!rows.length)root.append(el('p','No measured results in this view.','empty'));
+ for(const s of rows){const card=el('article',undefined,'entry');card.append(el('b',s.contract),el('small',String(s.daily_result).replaceAll('_',' ')),el('small','Signal '+formatTime(s.created_at)+' · Ask entry '+money(s.entry_ask)+' · '+s.feed));
+ if(Number.isFinite(s.peak_return))card.append(el('strong','Observed peak '+(s.peak_return>=0?'+':'')+(s.peak_return*100).toFixed(1)+'%',s.peak_return>=0?'good':'bad'));
+ if(Number.isFinite(s.close_return))card.append(el('small','Closing reference '+(s.close_return>=0?'+':'')+(s.close_return*100).toFixed(1)+'% · '+formatTime(s.close_quote_at)));
+ if(s.profit_lock?.stop_hit_at)card.append(el('small','Profit-stop exit observed '+formatTime(s.profit_lock.stop_hit_at)+' · '+(s.profit_lock.observed_exit_return*100).toFixed(1)+'% gross'));
+ card.append(el('small','Sampled research only. Gaps may hide earlier crossings; no verified fill.'));root.append(card);}
+}
+async function refreshPerformance(){if(performanceBusy||document.hidden)return;performanceBusy=true;
+ try{performanceData=await api('/api/performance');const c=performanceData.counts||{};const root=document.querySelector('#performanceCounts');root.replaceChildren();
+ for(const [label,value] of [['Winners',(c.WIN_TARGET_FIRST_OBSERVED||0)+(c.WIN_POSITIVE_CLOSE||0)],['Losers',c.LOSS_AT_CLOSE||0],['Flat',c.FLAT_AT_CLOSE||0],['Unresolved',(c.UNRESOLVED_NO_CLOSE_QUOTE||0)+(c.ENTRY_TIME_FLAG||0)]]){const box=el('div');box.append(el('small',label),el('b',String(value)));root.append(box);}
+ renderPerformance();document.querySelector('#performanceStatus').textContent='Updated '+formatTime(performanceData.generated_at)+' · One earliest signal per contract/day. Lists show up to 30 recent results; major winners shows up to 20.';
+ }catch(e){document.querySelector('#performanceStatus').textContent=e.message+' Previous results may be stale.';}finally{performanceBusy=false;}}
+document.querySelector('#performanceFilter').addEventListener('change',renderPerformance);
+document.querySelector('#refreshPerformance').addEventListener('click',refreshPerformance);
+refreshPerformance();setInterval(refreshPerformance,60000);

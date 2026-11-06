@@ -45,7 +45,7 @@ export default {
     return new Response(await response.text(),{status:response.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
    }catch(error){const timedOut=['TimeoutError','AbortError'].includes(error?.name);return json({error:timedOut?'Railway chat request timed out. Check history before retrying.':'Cloudflare could not send the chat request. Check the proxy token format and backend connection.',code:timedOut?'CHAT_UPSTREAM_TIMEOUT':'CHAT_UPSTREAM_FETCH_FAILED'},502);}
   }
-  if(!['/api/earnings','/api/company-news','/api/stocks','/api/signals','/api/options','/api/brain','/api/news','/api/request','/api/proxy','/api/progress','/api/activity','/api/notifications'].includes(path))return json({error:'Not found'},404);
+  if(!['/api/earnings','/api/company-news','/api/stocks','/api/signals','/api/options','/api/performance','/api/brain','/api/news','/api/request','/api/proxy','/api/progress','/api/activity','/api/notifications'].includes(path))return json({error:'Not found'},404);
   if(request.method!=='GET'&&!(['/api/request','/api/notifications'].includes(path)&&request.method==='POST'))return json({error:'Method not allowed'},405);
   if(request.method==='GET'&&env.PUBLIC_LIMITER&&!(await env.PUBLIC_LIMITER.limit({key:request.headers.get('CF-Connecting-IP')||'unknown'})).success)return json({error:'Please wait before refreshing the public feed'},429);
   // Explicit opt-in: endpoint exposes only the research fields listed above publicly.
@@ -149,6 +149,12 @@ export default {
     const res=await fetch(u,{method:'POST',headers:{...headers,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(row),signal:AbortSignal.timeout(10000)});
     if(!res.ok)return json({error:'Could not queue request. Run the updated SQL migration.'},502);
     return json({id,status:'QUEUED',message:'A fresh scan is queued. Results may take several minutes; closed markets or missing data may return fewer than three.'},202);
+   }
+   if(path==='/api/performance'){
+    const u=new URL('/rest/v1/rpc/kst_signal_scoreboard',base);
+    const r=await fetch(u,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(10000)});
+    if(!r.ok)return json({error:'Signal performance unavailable. Verify scoreboard migration.'},502);
+    return json(await r.json());
    }
    if(path==='/api/brain'){
     const models=await read('kst_option_models',{select:'version,created_at,state,sample_count',order:'created_at.desc',limit:'1'});

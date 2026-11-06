@@ -158,3 +158,11 @@ test('each accepted request gets a distinct queue row, including within one minu
  assert.equal((await worker.fetch(new Request('https://mobile.example/api/request?id='+a.id),e)).status,200);
  }finally{globalThis.fetch=old;}
 });
+
+test('performance exposes only the fixed research scoreboard RPC',async()=>{
+ const old=globalThis.fetch;
+ try{globalThis.fetch=async(u,o)=>{assert.match(u.pathname,/rpc\/kst_signal_scoreboard$/);assert.equal(o.method,'POST');assert.deepEqual(JSON.parse(o.body),{});return Response.json({basis:'SAMPLED_SIGNAL_RESEARCH',counts:{LOSS_AT_CLOSE:2},winners:[],losers:[],major_winners:[]})};
+ const r=await worker.fetch(new Request('https://mobile.example/api/performance'),env);
+ assert.equal(r.status,200);assert.equal((await r.json()).basis,'SAMPLED_SIGNAL_RESEARCH');assert.equal(r.headers.get('cache-control'),'no-store');
+ }finally{globalThis.fetch=old;}
+});
