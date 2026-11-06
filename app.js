@@ -48,6 +48,41 @@ renderWatch();renderPaper();renderNotes();refreshSignals();setInterval(refreshSi
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 let optionBusy=false,brainBusy=false;
 async function api(path){const r=await fetch(path,{cache:'no-store',signal:AbortSignal.timeout(15000)});if(!(r.headers.get('content-type')||'').includes('application/json'))throw Error('Deploy the included Cloudflare Worker to enable the API.');const d=await r.json();if(!r.ok)throw Error(d.error||'Service unavailable');return d;}
+function signalCard(s,rank){
+ const card=el('article',undefined,'signalCard');
+ const valid=x=>x!==null&&x!==undefined&&Number.isFinite(Number(x));
+ const entry=valid(s.entry_ask)?Number(s.entry_ask):null;
+ const marked=valid(s.last_bid)&&s.last_quote_at;
+ const price=marked?Number(s.last_bid):entry;
+ const qt=marked?s.last_quote_at:s.quote_at,age=Date.now()-Date.parse(qt);
+ const fresh=Number.isFinite(age)&&age>=0&&age<=300000;
+ const ret=marked&&entry>0?(price-entry)/entry:null;
+ const heading=el('div',undefined,'signalHeading');
+ heading.append(el('b',(rank?'#'+rank+' · ':'')+s.underlying+' $'+s.strike+' '+s.option_type),el('span',s.expiration,'signalExpiry'));card.append(heading);
+ card.append(el('small',s.contract,'signalContract'));
+ const line=el('div',undefined,'signalPriceLine');
+ line.append(el('strong',money(price),'signalPrice'+(ret===null?'':ret>=0?' good':' bad')));
+ line.append(el('span',ret===null?'Recorded ask':(ret>=0?'▲ +':'▼ ')+(ret*100).toFixed(1)+'% vs entry',ret===null?'signalChange':ret>=0?'signalChange good':'signalChange bad'));card.append(line);
+ card.append(el('small',(marked?'Observed bid':'Entry ask')+' · '+(fresh?'Recent':'STALE / unknown age')+' · '+formatTime(qt),'signalQuote'));
+ const tags=el('div',undefined,'signalTags');tags.append(el('span',s.feed==='indicative'?'INDICATIVE · verify broker':String(s.feed||'Unknown feed'),'signalBadge'),el('span',String(s.context_label||'STRUCTURAL_ONLY').replaceAll('_',' '),'signalBadge'));card.append(tags);
+ const grid=el('div',undefined,'signalMetrics');
+ const metric=(label,value)=>{const box=el('div');box.append(el('small',label),el('b',value));grid.append(box);};
+ metric(marked?'Observed bid':'Entry bid',money(marked?s.last_bid:s.entry_bid));metric('Recorded ask',money(entry));
+ metric('1 contract + fees',entry===null?'Unavailable':money(entry*100+Number(s.fee_estimate||0)));metric('Rank score',valid(s.score)?Number(s.score).toFixed(1)+'/100':'Unavailable');
+ const activity=s.risk_snapshot?.ranking_evidence?.activity;
+ metric('Contract volume',valid(activity?.contract_volume)?Number(activity.contract_volume).toLocaleString():'Unavailable');metric('Open interest',valid(activity?.open_interest)?Number(activity.open_interest).toLocaleString():'Unavailable');card.append(grid);
+ const probability=el('div',undefined,'signalProbability');probability.append(el('small','Win probability'),el('b','Not calibrated'));card.append(probability);
+ const levels=el('div',undefined,'signalLevels');
+ for(const [label,multiple,cls] of [['T1 +30%',1.3,'good'],['T2 +50%',1.5,'good'],['T3 +100%',2,'good'],['Stop −30%',.7,'bad']]){const box=el('div');box.append(el('small',label),el('b',entry===null?'—':money(entry*multiple),cls));levels.append(box);}card.append(levels);
+ card.append(el('small','Premium review levels from recorded ask; not forecasts or automatic orders. Stop fills can differ.','signalFootnote'));
+ const details=el('details',undefined,'signalDetails');details.append(el('summary','Research details & risk'));
+ details.append(el('p','Score ranks research quality; it is not a win probability. No calibrated probability is available. Targets and stop refer to option premium per share, not the underlying price.'));
+ if(s.feed==='indicative')details.append(el('p','Indicative quotes are modified and are not executable OPRA prices. Confirm current bid/ask with your broker.'));
+ if(s.quality_label==='WATCHLIST')details.append(el('p','WATCHLIST: relaxed spread or delta quality; not a confirmed entry.'));
+ if(valid(s.estimated_pl))details.append(el('p','Estimated P/L '+money(s.estimated_pl)+' including configured fees; no verified fill.'));
+ if(activity)details.append(el('p','Volume as of '+formatTime(activity.volume_as_of)+' · OI date '+(activity.open_interest_date||'Unknown')+'. Activity does not establish institutional buying.'));
+ details.append(el('p','Target +50% observed: '+(s.target_seen?'Yes':'No')+' · Stop −30% observed: '+(s.stop_seen?'Yes':'No')+' · Model '+(s.model_version||'Unknown')));card.append(details);return card;
+}
 async function refreshOptions(){
  if(optionBusy||document.hidden)return;optionBusy=true;
  const category=document.querySelector('#optionCategory').value,budget=document.querySelector('#optionBudget').value;
@@ -55,16 +90,7 @@ async function refreshOptions(){
  try{const data=await api('/api/options?category='+encodeURIComponent(category)+'&budget='+budget);
  if(category!==document.querySelector('#optionCategory').value||budget!==document.querySelector('#optionBudget').value)return;
  root.replaceChildren();if(!data.signals.length)root.append(el('p','No fresh, open qualifying records for this category and budget. The scanner does not invent contracts when quotes are missing.','empty'));
- for(const s of data.signals){const d=el('article',undefined,'entry');const qt=s.last_quote_at??s.quote_at;const age=Date.now()-Date.parse(qt);const fresh=Number.isFinite(age)&&age>=0&&age<=300000;
- d.append(el('b',s.underlying+' '+s.expiration+' $'+s.strike+' '+s.option_type));d.append(el('small',s.contract+' · '+(s.context_label??'STRUCTURAL_ONLY')));
- d.append(el('strong','Quality '+Number(s.score).toFixed(1)+'/100 · '+s.state));
- d.append(el('small','Recorded ask entry '+money(s.entry_ask)+' · Estimated cost '+money(s.entry_ask*100+Number(s.fee_estimate||0))+' including reserved fees · Round-trip fee estimate '+money(s.fee_estimate)));
- d.append(el('small',(fresh?'Recent quote':'STALE / unknown quote age')+' · '+formatTime(qt)+' · Feed: '+s.feed));
- if(s.feed==='indicative')d.append(el('strong','INDICATIVE: modified quotes; not executable OPRA prices.','bad'));
- if(s.estimated_pl!==null){d.append(el('strong','Estimated P/L: '+money(s.estimated_pl)+' ('+(s.estimated_return*100).toFixed(1)+'%)',s.estimated_pl>=0?'good':'bad'));d.append(el('small','Observed peak '+(s.max_return*100).toFixed(1)+'% · Drawdown from entry '+(s.min_return*100).toFixed(1)+'% · Giveback from peak '+((s.max_return-s.estimated_return)*100).toFixed(1)+' percentage points'));}
- else d.append(el('small','Awaiting a later valid bid to estimate P/L.'));
- d.append(el('small','Target +50% observed: '+(s.target_seen?'Yes':'No')+' · Stop −30% observed: '+(s.stop_seen?'Yes':'No')+' · No automatic exit'));
- d.append(el('small','Original model: '+s.model_version+' · Recorded '+formatTime(s.created_at)));root.append(d);}
+ for(const [i,s] of data.signals.entries())root.append(signalCard(s,i+1));
  const history=document.querySelector('#optionHistory');history.replaceChildren();
  for(const s of data.history??[]){const item=el('article',undefined,'entry');item.append(el('b',s.contract+' · '+s.state));item.append(el('small','Entry recorded '+formatTime(s.created_at)+' · Last bid '+formatTime(s.last_quote_at)));if(s.estimated_pl!==null)item.append(el('strong','Estimated '+money(s.estimated_pl)+' · Observed peak '+(s.max_return*100).toFixed(1)+'% · Giveback '+((s.max_return-s.estimated_return)*100).toFixed(1)+' percentage points',s.estimated_pl>=0?'good':'bad'));else item.append(el('small','No valid later bid recorded.'));history.append(item);}
  status.textContent='Fetched '+new Date().toLocaleTimeString()+'. Research estimates only; not broker fills. History is limited to 20 latest contract records for this selection.';
@@ -81,7 +107,7 @@ let newsBusy=false,newsItems=[];
 function renderNews(){const root=document.querySelector('#newsItems'),sector=document.querySelector('#newsSector').value;root.replaceChildren();const rows=newsItems.filter(n=>sector==='All'||n.sectors.includes(sector));if(!rows.length)root.append(el('p','No recent articles for this filter. Check news worker status.','empty'));for(const n of rows){const d=el('article',undefined,'entry');const a=el('a',n.title);try{const u=new URL(n.url);if(u.protocol!=='https:'||!(u.hostname==='cnbc.com'||u.hostname.endsWith('.cnbc.com')))continue;a.href=u.href;}catch{continue;}a.target='_blank';a.rel='noopener noreferrer';d.append(a,el('small',n.source+' · '+formatTime(n.published_at)),el('small',n.sectors.join(' · ')));root.append(d);}}
 async function refreshNews(){if(newsBusy||document.hidden)return;newsBusy=true;try{const d=await api('/api/news');newsItems=d.items;renderNews();const h=d.health;document.querySelector('#newsStatus').textContent=(h?'Feed '+h.status+' · Last checked '+formatTime(h.updated_at)+' · '+h.message:'News worker has not checked the feeds yet.')+' Browser refreshes each minute; backend polls every five minutes.';}catch(e){document.querySelector('#newsStatus').textContent=e.message+' Previously displayed news may be stale.';}finally{newsBusy=false;}}
 let requestTimer=null,requestCount=0;
-function renderRequested(rows){const root=document.querySelector('#requestResults');root.replaceChildren();for(const [i,s] of rows.entries()){const d=el('article',undefined,'entry');d.append(el('b','#'+(i+1)+' '+s.contract));d.append(el('small',s.context_label??'STRUCTURAL_ONLY'));d.append(el('strong',(s.quality_label==='WATCHLIST'?'WATCHLIST / relaxed quality':'QUALIFIED RESEARCH')+' · '+s.score+'/100'));d.append(el('small',(Date.now()-Date.parse(s.quote_at)>300000?'STALE result · ':'')+'Ask '+money(s.entry_ask)+' · Cost '+money(s.entry_ask*100+Number(s.fee_estimate||0))+' including reserved fees · '+s.feed+' · '+formatTime(s.quote_at)));if(s.quality_label==='WATCHLIST')d.append(el('small','Wider spread or lower delta quality. This is a fallback research idea, not a confirmed entry.'));root.append(d);}}
+function renderRequested(rows){const root=document.querySelector('#requestResults');root.replaceChildren();for(const [i,s] of rows.entries())root.append(signalCard(s,i+1));}
 async function checkRequest(id){try{const d=await api('/api/request?id='+encodeURIComponent(id));document.querySelector('#requestStatus').textContent=d.message||d.status;if(d.status==='DONE'){renderRequested(d.results);clearInterval(requestTimer);document.querySelector('#requestTop3').disabled=false;refreshOptions();document.querySelector('#requestStatus').textContent='Results ready. Your request is saved in My ideas.';}else if(d.status==='ERROR'){clearInterval(requestTimer);document.querySelector('#requestTop3').disabled=false;}else if(++requestCount>=36){clearInterval(requestTimer);document.querySelector('#requestTop3').disabled=false;document.querySelector('#requestStatus').textContent='Still queued after three minutes. Check Railway; the regular feed continues refreshing.';}}catch(e){clearInterval(requestTimer);document.querySelector('#requestTop3').disabled=false;document.querySelector('#requestStatus').textContent=e.message;}}
 document.querySelector('#requestTop3').addEventListener('click',async()=>{const b=document.querySelector('#requestTop3');b.disabled=true;clearInterval(requestTimer);document.querySelector('#requestResults').replaceChildren();try{await requireIdeaAccount();const d=await chatAPI('suggestions','POST',{category:document.querySelector('#optionCategory').value,budget:Number(document.querySelector('#optionBudget').value)});document.querySelector('#requestStatus').textContent=d.message;requestCount=0;requestTimer=setInterval(()=>checkRequest(d.id),5000);}catch(e){b.disabled=false;document.querySelector('#requestStatus').textContent=e.message;}});
 document.querySelector('#refreshNews').addEventListener('click',refreshNews);document.querySelector('#newsSector').addEventListener('change',renderNews);refreshNews();setInterval(refreshNews,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshNews()});
