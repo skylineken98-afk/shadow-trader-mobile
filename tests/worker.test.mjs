@@ -37,7 +37,7 @@ test('static assets route through binding',async()=>{
 test('options validates filters and returns only public contract fields',async()=>{
  assert.equal((await worker.fetch(new Request('https://mobile.example/api/options?budget=999'),env)).status,400);
  const original=globalThis.fetch;
- try{globalThis.fetch=async url=>{assert.match(url.pathname,/kst_option_signals$/);assert.equal(url.searchParams.get('category'),'eq.Swings');assert.equal(url.searchParams.get('budget'),'eq.100');return Response.json([{contract:'X',state:'OPEN',expiration:'2099-01-01',quote_at:new Date().toISOString(),score:80,features:[1,2,3],private:'omit',entry_ask:1}]);};
+ try{globalThis.fetch=async url=>{assert.match(url.pathname,/kst_option_signals$/);assert.equal(url.searchParams.get('category'),'eq.Swings');assert.equal(url.searchParams.get('budget'),'eq.100');return Response.json([{contract:'X',state:'OPEN',expiration:new Date(Date.now()+10*86400000).toISOString().slice(0,10),quote_at:new Date().toISOString(),score:80,features:[1,2,3],private:'omit',entry_ask:1}]);};
  const r=await worker.fetch(new Request('https://mobile.example/api/options?category=Swings&budget=100'),env);const d=await r.json();assert.equal(d.signals[0].contract,'X');assert.equal('features' in d.signals[0],false);assert.equal('private' in d.signals[0],false);
  }finally{globalThis.fetch=original;}
 });

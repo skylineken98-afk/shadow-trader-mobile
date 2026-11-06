@@ -166,7 +166,7 @@ export default {
     for(const row of rows){if(!row||typeof row.contract!=='string'||seen.has(row.contract))continue;seen.add(row.contract);signals.push(Object.fromEntries(publicFields.map(f=>[f,row[f]??null])));}
     const history=signals.slice(0,20);
     const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-    const ranked=signals.filter(s=>{const age=Date.now()-Date.parse(s.last_quote_at??s.quote_at);return s.quality_label!=='WATCHLIST'&&s.state==='OPEN'&&s.expiration>=today&&age>=0&&age<=300000;}).sort((a,b)=>b.score-a.score);
+    const ranked=signals.filter(s=>{const dte=(Date.parse(s.expiration)-Date.parse(today))/86400000;if(category==='Swings'&&!(dte>=5&&dte<=45))return false;const age=Date.now()-Date.parse(s.last_quote_at??s.quote_at);return s.quality_label!=='WATCHLIST'&&s.state==='OPEN'&&s.expiration>=today&&age>=0&&age<=300000;}).sort((a,b)=>b.score-a.score);
     return json({signals:ranked.slice(0,3),history,fetched_at:new Date().toISOString(),note:'Research quality ranking, not a directional entry recommendation. Estimated long-one-contract P/L; no verified fills.'});
    }
    const url=new URL('/rest/v1/ultimate_signals',base);
