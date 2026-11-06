@@ -36,6 +36,9 @@
     }
   ],
   "vars": {
-    "CHAT_BACKEND_URL": "https://kst-chat-production.up.railway.app"
-  }
+    "CHAT_BACKEND_URL": "https://kst-chat-production.up.railway.app",
+    "PUBLIC_SIGNALS_ENABLED": "true",
+    "SUPABASE_URL": "https://efwubsygzrtxhkxrzgzv.supabase.co"
+  },
+  "keep_vars": true
 }
