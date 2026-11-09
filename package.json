@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "test": "node --test tests/worker.test.mjs && node tests/ui-smoke.mjs",
+    "test": "node --test tests/worker.test.mjs tests/session.test.mjs && node tests/ui-smoke.mjs",
     "test:browser": "node tests/browser-smoke.mjs"
   },
   "devDependencies": {
